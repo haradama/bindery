@@ -86,7 +86,7 @@ pub mod scanner {
                 if !content.ends_with('\n') {
                     out.push('\n');
                 }
-                out.push_str("````\n"); // close fence + blank line
+                out.push_str("```\n"); // close fence + blank line
             }
 
             Ok(out)
