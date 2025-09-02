@@ -130,13 +130,14 @@ pub mod scanner {
 
     /// Remove comments using language-aware rules from `tokei`.
     pub fn remove_comments(content: &str, language_type: LanguageType) -> String {
-        let mut result = String::new();
-        let lines: Vec<&str> = content.lines().collect();
+        let mut out_lines: Vec<String> = Vec::new();
 
         let mut in_multiline_comment = false;
         let mut multiline_comment_end = "";
 
-        for line in lines {
+        for line in content.lines() {
+            let original_has_non_ws = line.chars().any(|c| !c.is_whitespace());
+
             let processed_line = if in_multiline_comment {
                 process_line_in_multiline_comment(
                     line,
@@ -153,14 +154,16 @@ pub mod scanner {
                 )
             };
 
-            result.push_str(&processed_line);
-            result.push('\n');
+            let processed_is_ws_only = processed_line.trim().is_empty();
+
+            if processed_is_ws_only && original_has_non_ws {
+                continue;
+            } else {
+                out_lines.push(processed_line);
+            }
         }
 
-        if result.ends_with('\n') {
-            result.pop();
-        }
-        result
+        out_lines.join("\n")
     }
 
     fn process_line_normal(
