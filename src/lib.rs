@@ -136,6 +136,8 @@ pub mod scanner {
         let mut multiline_comment_end = "";
 
         for line in content.lines() {
+            let was_in_multiline_comment = in_multiline_comment;
+
             let original_has_non_ws = line.chars().any(|c| !c.is_whitespace());
 
             let processed_line = if in_multiline_comment {
@@ -156,11 +158,16 @@ pub mod scanner {
 
             let processed_is_ws_only = processed_line.trim().is_empty();
 
-            if processed_is_ws_only && original_has_non_ws {
-                continue;
-            } else {
-                out_lines.push(processed_line);
+            if processed_is_ws_only {
+                if was_in_multiline_comment {
+                    continue;
+                }
+                if original_has_non_ws {
+                    continue;
+                }
             }
+
+            out_lines.push(processed_line);
         }
 
         out_lines.join("\n")
@@ -401,5 +408,15 @@ function t(){
         assert!(!result.contains("// end"));
         assert!(!result.contains("/* multi"));
         assert!(result.contains("// not a comment"));
+    }
+
+    #[test]
+    fn multiline_comment_blank_lines_are_removed() {
+        let content = "fn main() {\n/*\n   \n*/\nprintln!(\"x\");\n}\n";
+        let result = remove_comments(content, LanguageType::Rust);
+
+        assert!(result.contains("fn main() {"));
+        assert!(result.contains("println!(\"x\");"));
+        assert!(!result.contains("\n\n\n"));
     }
 }
