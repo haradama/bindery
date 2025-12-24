@@ -1,8 +1,9 @@
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
+use ignore::WalkBuilder;
+use ignore::overrides::OverrideBuilder;
 use tokei::{Config, LanguageType};
-use walkdir::{DirEntry, WalkDir};
 
 pub mod scanner {
     use super::*;
@@ -41,37 +42,60 @@ pub mod scanner {
                 .and_then(|p| p.canonicalize().ok());
 
             for base in &self.paths {
-                for entry in WalkDir::new(base)
-                    .follow_links(false)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                    .filter(|e| self.keep_entry(e, &output_canon))
-                {
+                let mut builder = WalkBuilder::new(base);
+                builder.follow_links(false);
+
+                if self.include_hidden {
+                    builder.hidden(false);
+                }
+
+                if !self.excluded.is_empty() {
+                    let mut ov = OverrideBuilder::new(base);
+                    for pat in &self.excluded {
+                        ov.add(&format!("!{pat}")).map_err(|e| {
+                            std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
+                        })?;
+                    }
+                    let overrides = ov
+                        .build()
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+                    builder.overrides(overrides);
+                }
+
+                for result in builder.build() {
+                    let entry = match result {
+                        Ok(e) => e,
+                        Err(_) => continue,
+                    };
+
+                    if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+                        continue;
+                    }
+
                     let path = entry.path();
 
-                    if let Some(lang) = LanguageType::from_path(path, &Config::default()) {
-                        match fs::read_to_string(path) {
-                            Ok(mut content) => {
-                                if self.strip_comments {
-                                    content = remove_comments(&content, lang);
-                                }
+                    if let Some(out) = &output_canon {
+                        if let Ok(p) = path.canonicalize() {
+                            if &p == out {
+                                continue;
+                            }
+                        }
+                    }
 
-                                let rel = relative_display(path);
-                                items.push((rel, content, lang));
+                    if let Some(lang) = LanguageType::from_path(path, &Config::default()) {
+                        if let Ok(mut content) = fs::read_to_string(path) {
+                            if self.strip_comments {
+                                content = remove_comments(&content, lang);
                             }
-                            Err(_) => {
-                                // Skip non-UTF8 or unreadable files silently
-                            }
+                            let rel = relative_display(path);
+                            items.push((rel, content, lang));
                         }
                     }
                 }
             }
 
-            // Sort by path for stable output
             items.sort_by(|a, b| a.0.cmp(&b.0));
 
-            // Render into the requested format
             let mut out = String::new();
             for (i, (path_str, content, lang)) in items.into_iter().enumerate() {
                 if i > 0 {
@@ -86,45 +110,10 @@ pub mod scanner {
                 if !content.ends_with('\n') {
                     out.push('\n');
                 }
-                out.push_str("```\n"); // close fence + blank line
+                out.push_str("```\n");
             }
 
             Ok(out)
-        }
-
-        fn keep_entry(&self, entry: &DirEntry, output_canon: &Option<PathBuf>) -> bool {
-            let path = entry.path();
-
-            // Exclude output file itself
-            if let Some(out) = output_canon {
-                if let Ok(p) = path.canonicalize() {
-                    if &p == out {
-                        return false;
-                    }
-                }
-            }
-
-            // Exclude by simple pattern match
-            if self.should_exclude(path) {
-                return false;
-            }
-
-            // Hidden filtering (unless include_hidden)
-            if !self.include_hidden && is_hidden(path) {
-                return false;
-            }
-
-            true
-        }
-
-        fn should_exclude(&self, path: &Path) -> bool {
-            let path_str = path.to_string_lossy();
-            self.excluded.iter().any(|pat| {
-                path_str.contains(pat)
-                    || path
-                        .file_name()
-                        .map_or(false, |n| n.to_string_lossy().contains(pat))
-            })
         }
     }
 
@@ -339,14 +328,6 @@ pub mod scanner {
             LanguageType::Haskell => "haskell",
             _ => "text",
         }
-    }
-
-    fn is_hidden(path: &Path) -> bool {
-        // Treat any component starting with '.' as hidden (except root/current/parent markers)
-        path.components().any(|c| match c {
-            Component::Normal(os) => os.to_string_lossy().starts_with('.'),
-            _ => false,
-        })
     }
 }
 

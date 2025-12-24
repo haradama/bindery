@@ -47,12 +47,7 @@ fn main() -> io::Result<()> {
 
     let output_path = cli.output.as_ref().map(|p| p.clone());
 
-    let excluded = vec![
-        String::from("target"),
-        String::from("node_modules"),
-        String::from(".git"),
-        String::from(".DS_Store"),
-    ];
+    let excluded = vec![String::from(".git")];
 
     let scanner = CodeScanner::new(
         paths,
