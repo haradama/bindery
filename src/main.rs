@@ -45,7 +45,7 @@ fn main() -> io::Result<()> {
         }
     }
 
-    let output_path = cli.output.as_ref().map(|p| p.clone());
+    let output_path = cli.output.clone();
 
     let excluded = vec![String::from(".git")];
 

@@ -74,22 +74,21 @@ pub mod scanner {
 
                     let path = entry.path();
 
-                    if let Some(out) = &output_canon {
-                        if let Ok(p) = path.canonicalize() {
-                            if &p == out {
-                                continue;
-                            }
-                        }
+                    if let Some(out) = &output_canon
+                        && let Ok(p) = path.canonicalize()
+                        && &p == out
+                    {
+                        continue;
                     }
 
-                    if let Some(lang) = LanguageType::from_path(path, &Config::default()) {
-                        if let Ok(mut content) = fs::read_to_string(path) {
-                            if self.strip_comments {
-                                content = remove_comments(&content, lang);
-                            }
-                            let rel = relative_display(path);
-                            items.push((rel, content, lang));
+                    if let Some(lang) = LanguageType::from_path(path, &Config::default())
+                        && let Ok(mut content) = fs::read_to_string(path)
+                    {
+                        if self.strip_comments {
+                            content = remove_comments(&content, lang);
                         }
+                        let rel = relative_display(path);
+                        items.push((rel, content, lang));
                     }
                 }
             }
@@ -99,13 +98,13 @@ pub mod scanner {
             let mut out = String::new();
             for (i, (path_str, content, lang)) in items.into_iter().enumerate() {
                 if i > 0 {
-                    out.push_str("\n");
+                    out.push('\n');
                 }
                 out.push_str(&path_str);
                 out.push_str("\n\n");
                 out.push_str("```");
                 out.push_str(language_name(lang));
-                out.push_str("\n");
+                out.push('\n');
                 out.push_str(&content);
                 if !content.ends_with('\n') {
                     out.push('\n');
@@ -298,10 +297,10 @@ pub mod scanner {
     }
 
     fn relative_display(path: &Path) -> String {
-        if let Ok(cwd) = std::env::current_dir() {
-            if let Ok(rel) = path.strip_prefix(&cwd) {
-                return to_forward_slash(rel);
-            }
+        if let Ok(cwd) = std::env::current_dir()
+            && let Ok(rel) = path.strip_prefix(&cwd)
+        {
+            return to_forward_slash(rel);
         }
         to_forward_slash(path)
     }
